@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="hi" data-theme="light">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="शिक्षा प्लेटफॉर्म - आधुनिक तकनीक के साथ सीखें">
+  <link rel="stylesheet" href="styles.css">
+  <script src="js/main.js"></script>
+  <script src="main.js"></script>
+  <script src="service-worker.js"></script>
+
+
+  <!-- Security Headers -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.example.com;">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+
+  <title>Education Platform - शिक्षा मंच</title>
+
+  <!-- Preload Critical Resources -->
+  <link rel="preload" href="css/styles.css" as="style">
+  <link rel="preload" href="js/main.js" as="script">
+
+  <!-- Critical CSS -->
+  <style>
+    :root {
+      --primary-color: #3b82f6;
+      --secondary-color: #64748b;
+      --background-color: #ffffff;
+      --text-color: #1f2937;
+      --accent-color: #f59e0b;
+      --animation-duration: 0.3s;
+      --animation-easing: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    [data-theme="dark"] {
+      --primary-color: #60a5fa;
+      --secondary-color: #94a3b8;
+      --background-color: #111827;
+      --text-color: #f9fafb;
+      --accent-color: #fbbf24;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+      background-color: var(--background-color);
+      overflow-x: hidden;
+      user-select: none;
+    }
+
+    .loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      color: white;
+      transition: opacity 0.5s ease;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+
+  <div id="notification" class="notification" style="display:none;"></div>
+
+  <script>
+
+    class LoginModal {
+      constructor() {
+        this.injectHTML();
+        this.modal = document.getElementById('loginModal');
+        this.closeBtn = this.modal.querySelector('.close-btn');
+        this.loginForm = this.modal.querySelector('#loginForm');
+        this.emailInput = this.modal.querySelector('#email');
+        this.passwordInput = this.modal.querySelector('#password');
+        this.togglePasswordBtn = this.modal.querySelector('#togglePassword');
+        this.loginButton = this.modal.querySelector('#loginButton');
+        this.demoButton = this.modal.querySelector('#demoButton');
+        this.emailError = this.modal.querySelector('#emailError');
+        this.passwordError = this.modal.querySelector('#passwordError');
+        this.capsLockWarning = this.modal.querySelector('#capsLockWarning');
+        this.captchaCheckbox = this.modal.querySelector('#captchaCheckbox');
+        this.captchaError = this.modal.querySelector('#captchaError');
+        this.lockoutMsg = this.modal.querySelector('#lockoutMsg');
+        this.fields = this.modal.querySelectorAll('.float-group input');
+        this.lockedOut = false;
+        this.loginAttempts = 0;
+        this.addEventListeners();
+        this.openModal();
+        this.validateForm();
+      }
+      injectHTML() {
+        const modalHTML = `
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+      :root {
+        --shadow: 0 10px 32px #19151466;
+        --glass-bg: rgba(28,28,41,0.89);
+        --gold: #ffd366;
+        --gold-dark: #bba237;
+        --blue: #19244a;
+        --text-main: #fffbe7;
+        --input-bg: rgba(38,48,71,0.91);
+        --input-border: #ffd366cc;
+        --danger: #ff4e58;
+      }
+      .modal {
+        font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important;
+        display: none; position:fixed; z-index:10000; inset: 0;
+        justify-content: center; align-items: center;
+        background: rgba(17,18,26,0.69);
+        transition:background 0.5s;
+        backdrop-filter: blur(10px);
+        animation: fadeInGlass 0.4s backwards;
+      }
+      @keyframes fadeInGlass {from{opacity:0;}to{opacity:1;}}
+      .modal-content {
+        background: var(--glass-bg);
+        box-shadow: var(--shadow);
+        min-width:335px;
+        max-width: 410px;
+        width: 94vw;
+        padding:38px 34px 33px 34px;
+        border-radius: 21px;
+        border: 1.5px solid #fff4;
+        display: flex; flex-direction:column;
+        position:relative;
+        transform: translateY(-32px);
+        animation: modalPop 0.5s cubic-bezier(.4,2,.2,1) .04s forwards;
+      }
+      @keyframes modalPop {0%{transform:translateY(-32px) scale(0.99);} 90%{transform:translateY(4px) scale(1.035);} 100%{transform:translateY(0) scale(1);}}
+      .close-btn {
+        position: absolute; top: 18px; right: 26px;
+        font-size: 32px; font-weight: 700; color: #ffd366bb;
+        background: none; border:none; cursor:pointer; z-index:10;
+        transition: 0.18s;
+        opacity:0.87;
+      }
+      .close-btn:hover {color:#fff; background:rgba(28,28,41,0.13);}
+      .modal-header {
+        font-size: 26px; font-weight:800; color:var(--gold);
+        letter-spacing: 0.8px; margin-bottom:30px; text-align:center;
+        text-shadow:0 2px 13px #ffc40022;
+        text-transform: uppercase;
+      }
+      #lockoutMsg { color: var(--danger); text-align: center; margin-bottom: 13px; font-weight: 600; }
+
+      form { display:flex; flex-direction:column;}
+      .float-group { position: relative; margin-bottom:24px; }
+      .float-group input {
+        width:100%; border: none; outline:none; 
+        border-radius: 10px;
+        padding: 15.5px 16px 15.5px 44px;
+        background: var(--input-bg);
+        font-size: 17px;
+        color: var(--text-main);
+        box-shadow:0 2.5px 12px #090c1655;
+        border: 2.3px solid transparent;
+        transition: border .19s, box-shadow .2s, background .2s;
+      }
+      .float-group input:focus {
+        border: 2.3px solid var(--gold);
+        background: #24294aee;
+      }
+      .float-group label {
+        position: absolute; left:44px; top:17px; color:#ecc681;
+        font-size:15px; font-weight:600; pointer-events:none;
+        background:none;
+        transition:.23s cubic-bezier(.65,0,.35,1);
+        opacity:0.92;
+      }
+      .float-group input:focus+label,
+      .float-group input:not(:placeholder-shown)+label
+      {
+        top:-13px; left:34px; background:var(--glass-bg);
+        font-size:12.8px; color:var(--gold-dark); padding:0 5px; border-radius:8px; opacity:.98;
+      }
+      .icon-input { position:absolute; left:12px; top: 15.8px; font-size:19px; color:#ffeda9cc; transition:color .21s;}
+      .float-group input:focus ~ .icon-input {color:var(--gold);}
+      #togglePassword {
+        position:absolute; right:10px; top:15.7px; font-size:16px;
+        color:var(--gold); background:none; border:none; cursor:pointer; font-weight:800;
+        transition: background .2s, color .25s; border-radius:5px;
+        padding:0 8px;
+      }
+      #togglePassword:hover {color:#fffab9; background:rgba(255,211,102,0.08);}
+      .error-message { color: var(--danger); font-size: 14px; min-height: 20px; font-weight:600;}
+      .caps-warning { font-size:13px; color:#ffd700; font-weight:700; min-height:18px;}
+      
+      .captcha-row { display:flex; align-items:center; margin-bottom:13px;}
+      .captcha-row label {color: #fffbe7; margin:0 0 0 7px;}
+      #captchaCheckbox {width:19px;height:19px;}
+
+      .options {
+        display:flex; justify-content:space-between; align-items:center; margin-bottom:13px; margin-top:2px;
+        font-size:14px;
+      }
+      .remember-me {display: flex;align-items: center; color:#ffefa2;}
+      .remember-me input {margin-right:7px;width:16px; height:16px;}
+      .forgot-password { color:var(--gold); text-decoration:none; font-weight:700; cursor:pointer;
+        transition:color .23s;}
+      .forgot-password:hover {color:var(--gold-dark);}
+      button[type="submit"], .demo-btn {
+        background: var(--gold);
+        color: #282626; font-size:17px; font-weight:900; border:none;
+        padding: 13px 9px;
+        box-shadow:0 5px 17px #ffd36635;
+        border-radius: 10px; cursor:pointer;
+        margin-top:8px;margin-bottom:4.5px;
+        transition: background .18s,color .22s,box-shadow .19s, transform .16s;
+        letter-spacing:.3px;
+      }
+      button[type="submit"]:hover:not(:disabled), .demo-btn:hover {
+        background: #ffe17d; color: #232330; box-shadow:0 10px 25px #ffd366cc;
+        transform: translateY(-2.2px) scale(1.021);
+      }
+      button[type="submit"]:disabled { background:#adadad; color:#585858; box-shadow:none; cursor:not-allowed;}
+      .demo-btn {
+        background:#22dbaf; color: #1e4739;
+        margin:0; font-weight:700; font-size:16.2px;
+        box-shadow:0 3px 11px #00ecb725;
+      }
+      .demo-btn:active { transform:scale(0.98);}
+      @media (max-width:600px) {
+        .modal-content{max-width:96vw;padding:13vw 2vw 7vw 2vw;}
+      }
+    </style>
+    <div id="loginModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-content" tabindex="-1">
+        <button class="close-btn" id="closeModal" aria-label="Close Login Modal">&times;</button>
+        <div class="modal-header" id="modalTitle">Sign In</div>
+        <div id="lockoutMsg"></div>
+        <form id="loginForm" novalidate autocomplete="on">
+          <div class="float-group">
+            <input type="email" id="email" name="email" placeholder=" " autocomplete="email" required aria-describedby="emailError"/>
+            <label for="email">Email address</label>
+            <span class="icon-input">&#128231;</span>
+            <div id="emailError" class="error-message" aria-live="polite"></div>
+          </div>
+          <div class="float-group">
+            <input type="password" id="password" name="password" placeholder=" " autocomplete="current-password" required aria-describedby="passwordError capsLockWarning" maxlength="15" />
+            <label for="password">Password</label>
+            <span class="icon-input">&#128274;</span>
+            <button type="button" id="togglePassword" aria-label="Toggle password visibility">Show</button>
+            <div id="capsLockWarning" class="caps-warning" aria-live="polite"></div>
+            <div id="passwordError" class="error-message" aria-live="polite"></div>
+          </div>
+          <div class="captcha-row">
+            <input type="checkbox" id="captchaCheckbox" /><label for="captchaCheckbox">I'm not a robot</label>
+          </div>
+          <div id="captchaError" class="error-message" aria-live="polite"></div>
+          <div class="options">
+            <div class="remember-me"><input type="checkbox" id="rememberMe"/><label for="rememberMe">Remember me</label></div>
+            <a href="#" class="forgot-password" id="forgotPasswordLink">Forgot?</a>
+          </div>
+          <button type="submit" id="loginButton" disabled>Login</button>
+          <button type="button" class="demo-btn" id="demoButton">Demo Login</button>
+        </form>
+      </div>
+    </div>
+    `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+      }
+      addEventListeners() {
+        this.closeBtn.addEventListener('click', () => this.closeModal());
+        window.addEventListener('click', (e) => {
+          if (e.target === this.modal) this.closeModal();
+        });
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && this.modal.style.display === 'flex') this.closeModal();
+        });
+        this.togglePasswordBtn.addEventListener('click', () => {
+          const type = this.passwordInput.type;
+          this.passwordInput.type = type === 'password' ? 'text' : 'password';
+          this.togglePasswordBtn.textContent = type === 'password' ? 'Hide' : 'Show';
+          this.passwordInput.focus();
+        });
+        const capsLockCheck = (e) => {
+          this.capsLockWarning.textContent = e.getModifierState('CapsLock') ? 'Caps Lock is ON' : '';
+        };
+        this.passwordInput.addEventListener('keyup', capsLockCheck);
+        this.passwordInput.addEventListener('keydown', capsLockCheck);
+        this.emailInput.addEventListener('input', () => this.validateForm());
+        this.passwordInput.addEventListener('input', () => this.validateForm());
+        this.captchaCheckbox.addEventListener('change', () => this.validateForm());
+        this.loginForm.addEventListener('submit', (e) => this.handleSubmit(e));
+        this.demoButton.addEventListener('click', () => this.handleDemoLogin());
+      }
+      openModal() {
+        this.modal.style.display = 'flex';
+        setTimeout(() => this.emailInput.focus(), 120);
+      }
+      closeModal() {
+        this.modal.style.animation = 'fadeInGlass 0.3s reverse';
+        const modalContent = this.modal.querySelector('.modal-content');
+        modalContent.style.animation = 'modalPop 0.33s reverse';
+        setTimeout(() => {
+          this.modal.style.display = 'none';
+          this.modal.style.animation = '';
+          modalContent.style.animation = '';
+        }, 270);
+      }
+      validateEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.toLowerCase());
+      }
+      validatePassword(password) {
+        const minLength = 8, maxLength = 15;
+        const uppercase = /[A-Z]/, lowercase = /[a-z]/, number = /[0-9]/, specialChar = /[!@#$%^&*(),.?":{}|<>]/;
+        let errors = [];
+        if (password.length < minLength) errors.push("at least 8 chars");
+        if (password.length > maxLength) errors.push("no more than 15 chars");
+        if (!uppercase.test(password)) errors.push("1 uppercase");
+        if (!lowercase.test(password)) errors.push("1 lowercase");
+        if (!number.test(password)) errors.push("1 number");
+        if (!specialChar.test(password)) errors.push("1 special char");
+        return errors;
+      }
+      validateForm() {
+        if (this.lockedOut) {
+          this.loginButton.disabled = this.demoButton.disabled = true;
+          return;
+        }
+        const emailVal = this.emailInput.value.trim(),
+          passwordVal = this.passwordInput.value,
+          captchaChecked = this.captchaCheckbox.checked;
+        let valid = true;
+        if (!emailVal) {
+          this.emailError.textContent = 'Email is required'; valid = false;
+        } else if (!this.validateEmail(emailVal)) {
+          this.emailError.textContent = 'Invalid email'; valid = false;
+        } else { this.emailError.textContent = ''; }
+        if (!passwordVal) {
+          this.passwordError.textContent = 'Password required'; valid = false;
+        } else {
+          const passErrors = this.validatePassword(passwordVal);
+          if (passErrors.length > 0) {
+            this.passwordError.textContent = 'Needs ' + passErrors.join(', ');
+            valid = false;
+          } else { this.passwordError.textContent = ''; }
+        }
+        if (!captchaChecked) {
+          this.captchaError.textContent = 'Confirm you are not a robot'; valid = false;
+        } else { this.captchaError.textContent = ''; }
+        this.loginButton.disabled = !valid;
+      }
+      handleSubmit(e) {
+        e.preventDefault();
+        if (this.loginButton.disabled) return;
+        if (this.lockedOut) return;
+        this.loginButton.disabled = true;
+        this.loginButton.textContent = 'Logging in...';
+        setTimeout(() => {
+          // Simulate failed attempts for demo; replace with real auth call
+          let isSuccess = this.emailInput.value === 'admin@site.com' && this.passwordInput.value === 'Test@1234!';
+          if (!isSuccess) {
+            this.loginAttempts++;
+            if (this.loginAttempts >= 3) {
+              this.lockoutMsg.textContent = "Too many failed logins! Try again in 60 seconds.";
+              this.lockedOut = true;
+              this.loginButton.disabled = this.demoButton.disabled = true;
+              setTimeout(() => {
+                this.lockedOut = false;
+                this.loginAttempts = 0;
+                this.lockoutMsg.textContent = '';
+                this.demoButton.disabled = false;
+                this.validateForm();
+              }, 60000);
+            } else {
+              this.passwordError.textContent = `Login failed (${this.loginAttempts}/3)`;
+            }
+            this.loginButton.textContent = 'Login';
+            this.loginButton.disabled = false;
+          } else {
+            alert('Login successful! (simulate backend auth)');
+            this.closeModal();
+            this.loginButton.textContent = 'Login';
+            this.loginButton.disabled = false;
+            this.loginAttempts = 0;
+          }
+        }, 1100);
+      }
+      handleDemoLogin() {
+        this.emailInput.value = 'demo@site.com';
+        this.passwordInput.value = 'Demo@1234!';
+        this.captchaCheckbox.checked = true;
+        this.validateForm();
+        this.loginButton.disabled = false;
+        this.loginButton.textContent = 'Login';
+        setTimeout(() => { this.loginButton.click(); }, 275);
+      }
+    }
+    document.addEventListener('DOMContentLoaded', () => { window.myLoginModal = new LoginModal(); });
+  </script>
+
+  <!-- Place at the end of your HTML body -->
+  <script>
+    class LoginModal {
+      constructor() {
+        this.injectHTML();
+        this.modal = document.getElementById('loginModal');
+        this.closeBtn = this.modal.querySelector('.close-btn');
+        this.loginForm = this.modal.querySelector('#loginForm');
+        this.emailInput = this.modal.querySelector('#email');
+        this.passwordInput = this.modal.querySelector('#password');
+        this.togglePasswordBtn = this.modal.querySelector('#togglePassword');
+        this.loginButton = this.modal.querySelector('#loginButton');
+        this.demoButton = this.modal.querySelector('#demoButton');
+        this.emailError = this.modal.querySelector('#emailError');
+        this.passwordError = this.modal.querySelector('#passwordError');
+        this.capsLockWarning = this.modal.querySelector('#capsLockWarning');
+        this.captchaCheckbox = this.modal.querySelector('#captchaCheckbox');
+        this.captchaError = this.modal.querySelector('#captchaError');
+        this.lockoutMsg = this.modal.querySelector('#lockoutMsg');
+        this.lockedOut = false;
+        this.loginAttempts = 0;
+        this.addEventListeners();
+        this.openModal();
+        this.validateForm();
+      }
+      injectHTML() {
+        const modalHTML = `
+      <style>
+        :root {
+          --blue-grad: linear-gradient(135deg, #1f1c2c 0%, #928dab 100%);
+          --login-card-back: rgba(38, 50, 75, 0.88);
+          --accent: #ffd93b;
+          --accent-hover: #ffea70;
+          --danger: #ff5555;
+          --shadow: 0 20px 40px #111a3c88;
+          --glass-blur: blur(10px);
+        }
+        @media (max-width: 550px) {
+          .modal-content { max-width: 98vw !important; padding: 16px !important;}
+        }
+        .modal {
+          display: none;
+          position: fixed;
+          z-index: 10000;
+          left: 0; top: 0;
+          width: 100vw; height: 100vh;
+          background: rgba(34,34,60,0.55);
+          display: flex; justify-content: center; align-items: center;
+          animation: fadeInBg 0.5s both;
+          backdrop-filter: var(--glass-blur);
+        }
+        .modal-content {
+          background: var(--login-card-back);
+          background-image: var(--blue-grad);
+          border-radius: 23px;
+          box-shadow: var(--shadow);
+          position: relative;
+          animation: fadeInUp 0.45s cubic-bezier(.24,2,.27,.91) both;
+          max-width: 420px; width: 92vw;
+          padding: 38px 30px 36px 34px;
+          border: 2.7px solid rgba(255,255,255,0.18);
+          color: #f0f4f8;
+          overflow: visible;
+        }
+        .close-btn {
+          position: absolute; top: 17px; right: 25px;
+          font-size: 32px;
+          color: rgba(255,255,255,0.72);
+          cursor: pointer;
+          background: none; border: none; padding: 2px 8px; border-radius: 6px;
+          transition: background .19s, color .26s, transform .26s;
+        }
+        .close-btn:hover { background: #181b2b55; color: #fff; }
+        .modal-header { text-align: center; font-size: 26px; letter-spacing: 1px; font-weight: 800; margin-bottom: 26px; text-shadow: 0 2px 6px #181b2bcc;}
+        form { display: flex; flex-direction: column;}
+        label { font-weight: 700; color: #ededfa; margin-bottom: 7px; }
+        .input-wrapper { position: relative; }
+        .input-icon {
+          position: absolute; top: 10.5px; left: 13px; color: #9ddfff; font-size: 19px; pointer-events: none; opacity: .87;
+          transition: color .24s;
+        }
+        input[type="email"], input[type="password"] {
+          width: 100%; padding: 11px 18px 11px 39px;
+          border-radius: 11px;
+          font-size: 17px; margin-bottom: 18px;
+          border: 2px solid transparent; color: #25274d;
+          transition: border .26s, box-shadow .28s;
+          background: rgba(255,255,255,0.92);
+          box-shadow: 0 2px 8px #181b2b18;
+        }
+        input:focus { border-color: var(--accent); box-shadow: 0 2px 19px #ffd93b33; }
+        .password-wrapper { position: relative; }
+        #togglePassword {
+          position: absolute; top: 11px; right: 13px; font-size: 16px;
+          color: #eccd17; background: none; border: none; cursor: pointer; font-weight: 700;
+          transition: color .24s, background .25s;
+          border-radius: 5px; padding: 4px 9px;
+        }
+        #togglePassword:hover { background: #ffec8c; color: #222; }
+        .options { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;}
+        .remember-me { display: flex; align-items: center; font-size: 13.5px; color: #f8f4ed; }
+        .remember-me input { margin-right: 7px; width: 17px; height: 17px; }
+        .forgot-password {
+          color: var(--accent); font-size: 13.5px; text-decoration: none; font-weight: 700; cursor: pointer; transition: color .24s;
+        }
+        .forgot-password:hover { color: var(--accent-hover); }
+        button[type="submit"], .demo-btn {
+          background: var(--accent); color: #171428;
+          padding: 14px; font-size: 17px; font-weight: 800; border: none;
+          border-radius: 11px;
+          margin-bottom: 7px;
+          margin-top: 6px;
+          cursor: pointer; width: 100%;
+          box-shadow: 0 6px 18px #ffd93b44;
+          transition: background .18s, box-shadow .2s, color .15s, transform .15s;
+        }
+        button[type="submit"]:hover:not(:disabled), .demo-btn:hover {
+          background: var(--accent-hover); color: #232345; transform: translateY(-2px); box-shadow: 0 10px 22px #ffde59aa;
+        }
+        button[type="submit"]:active:not(:disabled), .demo-btn:active {
+          transform: translateY(2px) scale(.98);
+        }
+        button[type="submit"]:disabled { background: #bcbcbc; color: #515151; cursor: not-allowed; }
+        .demo-btn {
+          margin-top: 0; background: #7ee0c2; color: #20424a; font-weight: 700; border: none; box-shadow: 0 5px 16px #00bfae29; font-size: 17px;
+        }
+        .demo-btn:active { transform: scale(.98); }
+        .error-message { color: var(--danger); font-size: 13px; min-height: 19px; text-shadow: 0 0 3px #ff555577;}
+        .caps-warning { font-size:13px; color: #ffcb05; min-height: 18px; font-weight:700; text-shadow: 0 0 3px #ffc107bb;}
+        .captcha-row { display: flex; align-items: center; margin-bottom: 14px; user-select: none;}
+        .captcha-row label {color: #efefaf; margin:0 0 0 8px;}
+        #lockoutMsg { color: var(--danger); text-align: center; margin-bottom: 13px; font-weight: 600; }
+        .field-tooltip {
+          font-size: 12px; color: #a1f3f9; background: #191c2c;
+          border-radius: 7px; position: absolute; left: 2px; top: -27px; padding: 4px 10px;
+          opacity: 0; pointer-events:none; white-space: nowrap;
+          box-shadow: 0 1px 5px #111b2a88;
+          transition: opacity .25s;
+        }
+        .input-wrapper:focus-within .field-tooltip {opacity: 1;}
+        @keyframes fadeInBg { from{background:rgba(10,18,44,0);} to{background:rgba(34,34,60,0.55);} }
+        @keyframes fadeInUp {from{opacity:0;transform:translateY(45px);}to{opacity:1;transform:translateY(0);}}
+      </style>
+      <div id="loginModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-content" tabindex="-1">
+          <button class="close-btn" id="closeModal" aria-label="Close Login Modal">&times;</button>
+          <h2 class="modal-header" id="modalTitle">User Login</h2>
+          <div id="lockoutMsg"></div>
+          <form id="loginForm" novalidate autocomplete="on">
+            <div class="input-wrapper">
+              <span class="input-icon">📧</span>
+              <label for="email">Email Address</label>
+              <input type="email" id="email" name="email" placeholder="e.g. john@domain.com" autocomplete="email" required aria-describedby="emailError" />
+              <span class="field-tooltip">Enter a valid professional email.</span>
+              <div id="emailError" class="error-message" aria-live="polite"></div>
+            </div>
+            <div class="input-wrapper password-wrapper">
+              <span class="input-icon">🔒</span>
+              <label for="password">Password</label>
+              <input type="password" id="password" name="password" placeholder="Password" autocomplete="current-password" required aria-describedby="passwordError capsLockWarning" maxlength="15" />
+              <button type="button" id="togglePassword" aria-label="Toggle password visibility">Show</button>
+              <span class="field-tooltip">8-15 chars, 1 uppercase, 1 number, 1 special.</span>
+            </div>
+            <div id="capsLockWarning" class="caps-warning" aria-live="polite"></div>
+            <div id="passwordError" class="error-message" aria-live="polite"></div>
+            <div style="min-height:1px"></div>
+            <div class="captcha-row">
+              <input type="checkbox" id="captchaCheckbox" />
+              <label for="captchaCheckbox">I'm not a robot</label>
+            </div>
+            <div id="captchaError" class="error-message" aria-live="polite"></div>
+            <div class="options">
+              <div class="remember-me">
+                <input type="checkbox" id="rememberMe" name="rememberMe" />
+                <label for="rememberMe">Remember me</label>
+              </div>
+              <a href="#" class="forgot-password" id="forgotPasswordLink">Forgot?</a>
+            </div>
+            <button type="submit" id="loginButton" disabled>Login</button>
+            <button type="button" class="demo-btn" id="demoButton">Demo Login</button>
+          </form>
+        </div>
+      </div>
+      `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+      }
+      addEventListeners() {
+        this.closeBtn.addEventListener('click', () => this.closeModal());
+        window.addEventListener('click', (e) => {
+          if (e.target === this.modal) this.closeModal();
+        });
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && this.modal.style.display === 'flex') this.closeModal();
+        });
+        this.togglePasswordBtn.addEventListener('click', () => {
+          if (this.passwordInput.type === 'password') {
+            this.passwordInput.type = 'text';
+            this.togglePasswordBtn.textContent = 'Hide';
+          } else {
+            this.passwordInput.type = 'password';
+            this.togglePasswordBtn.textContent = 'Show';
+          }
+          this.passwordInput.focus();
+        });
+        const capsLockCheck = (e) => {
+          this.capsLockWarning.textContent = e.getModifierState('CapsLock') ? 'Warning: Caps Lock is ON' : '';
+        };
+        this.passwordInput.addEventListener('keyup', capsLockCheck);
+        this.passwordInput.addEventListener('keydown', capsLockCheck);
+        this.emailInput.addEventListener('input', () => this.validateForm());
+        this.passwordInput.addEventListener('input', () => this.validateForm());
+        this.captchaCheckbox.addEventListener('change', () => this.validateForm());
+        this.loginForm.addEventListener('submit', (e) => this.handleSubmit(e));
+        this.demoButton.addEventListener('click', () => this.handleDemoLogin());
+      }
+      openModal() {
+        this.modal.style.display = 'flex';
+        setTimeout(() => this.emailInput.focus(), 120);
+      }
+      closeModal() {
+        this.modal.style.animation = 'fadeOutBg 0.35s both';
+        const modalContent = this.modal.querySelector('.modal-content');
+        modalContent.style.animation = 'fadeInUp 0.35s reverse both';
+        setTimeout(() => {
+          this.modal.style.display = 'none';
+          this.modal.style.animation = '';
+          modalContent.style.animation = '';
+        }, 320);
+      }
+      validateEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.toLowerCase());
+      }
+      validatePassword(password) {
+        const minLength = 8, maxLength = 15;
+        const uppercase = /[A-Z]/, lowercase = /[a-z]/, number = /[0-9]/, specialChar = /[!@#$%^&*(),.?":{}|<>]/;
+        let errors = [];
+        if (password.length < minLength) errors.push("at least 8 chars");
+        if (password.length > maxLength) errors.push("no more than 15 chars");
+        if (!uppercase.test(password)) errors.push("1 uppercase");
+        if (!lowercase.test(password)) errors.push("1 lowercase");
+        if (!number.test(password)) errors.push("1 number");
+        if (!specialChar.test(password)) errors.push("1 special char");
+        return errors;
+      }
+      validateForm() {
+        if (this.lockedOut) {
+          this.loginButton.disabled = this.demoButton.disabled = true;
+          return;
+        }
+        const emailVal = this.emailInput.value.trim(),
+          passwordVal = this.passwordInput.value,
+          captchaChecked = this.captchaCheckbox.checked;
+        let valid = true;
+        if (!emailVal) {
+          this.emailError.textContent = 'Email is required'; valid = false;
+        } else if (!this.validateEmail(emailVal)) {
+          this.emailError.textContent = 'Invalid email'; valid = false;
+        } else { this.emailError.textContent = ''; }
+        if (!passwordVal) {
+          this.passwordError.textContent = 'Password required'; valid = false;
+        } else {
+          const passErrors = this.validatePassword(passwordVal);
+          if (passErrors.length > 0) {
+            this.passwordError.textContent = 'Needs ' + passErrors.join(', ');
+            valid = false;
+          } else { this.passwordError.textContent = ''; }
+        }
+        if (!captchaChecked) {
+          this.captchaError.textContent = 'Confirm you are not a robot'; valid = false;
+        } else { this.captchaError.textContent = ''; }
+        this.loginButton.disabled = !valid;
+      }
+      handleSubmit(e) {
+        e.preventDefault();
+        if (this.loginButton.disabled) return;
+        if (this.lockedOut) return;
+        this.loginButton.disabled = true;
+        this.loginButton.textContent = 'Logging in...';
+        setTimeout(() => {
+          // Simulate failed attempts for demo only, add your authentication call here
+          let isSuccess = this.emailInput.value === 'admin@perplexity.ai' && this.passwordInput.value === 'Test@1234!';
+          if (!isSuccess) {
+            this.loginAttempts++;
+            if (this.loginAttempts >= 3) {
+              this.lockoutMsg.textContent = "Too many failed logins! Try again in 60 seconds.";
+              this.lockedOut = true;
+              this.loginButton.disabled = this.demoButton.disabled = true;
+              setTimeout(() => {
+                this.lockedOut = false;
+                this.loginAttempts = 0;
+                this.lockoutMsg.textContent = '';
+                this.demoButton.disabled = false;
+                this.validateForm();
+              }, 60000);
+            } else {
+              this.passwordError.textContent = `Login failed (${this.loginAttempts}/3)`;
+            }
+            this.loginButton.textContent = 'Login';
+            this.loginButton.disabled = false;
+          } else {
+            alert('Login successful! (simulate backend auth here)');
+            this.closeModal();
+            this.loginButton.textContent = 'Login';
+            this.loginButton.disabled = false;
+            this.loginAttempts = 0;
+          }
+        }, 1200);
+      }
+      handleDemoLogin() {
+        this.emailInput.value = 'demo@perplexity.ai';
+        this.passwordInput.value = 'Demo@1234!';
+        this.captchaCheckbox.checked = true;
+        this.validateForm();
+        this.loginButton.disabled = false;
+        this.loginButton.textContent = 'Login';
+        setTimeout(() => {
+          this.loginButton.click(); // Submit as demo
+        }, 350);
+      }
+    }
+    document.addEventListener('DOMContentLoaded', () => { window.myLoginModal = new LoginModal(); });
+  </script>
+
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+</head>
+
+<body>
+  <!-- Loading Screen -->
+  <div class="loading-screen" id="loading-screen">
+    <div class="spinner"></div>
+    <p>लोड हो रहा है...</p>
+  </div>
+
+  <!-- Security Watermark -->
+  <div class="security-watermark"></div>
+
+  <!-- Navigation -->
+
+  <nav class="navbar" role="navigation" aria-label="मुख्य नेवीगेशन">
+    <div class="nav-container">
+      <div class="nav-brand">
+        <img src="images/logo.png" alt="Education Platform Logo" class="nav-logo">
+        <span class="nav-brand-text">Education Platform</span>
+      </div>
+
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <a href="#home" class="nav-link" data-translate="home">होम</a>
+        </li>
+        <li class="nav-item dropdown">
+          <a href="#courses" class="nav-link" data-translate="courses">
+            कोर्सेस <span class="dropdown-arrow">▾</span>
+          </a>
+          <ul class="dropdown-menu">
+            <li><a href="#primary" class="dropdown-link">प्राथमिक शिक्षा</a></li>
+            <li><a href="#secondary" class="dropdown-link">माध्यमिक शिक्षा</a></li>
+            <li><a href="#higher" class="dropdown-link">उच्च शिक्षा</a></li>
+            <li><a href="#skills" class="dropdown-link">कौशल विकास</a></li>
+          </ul>
+        </li>
+        <li class="nav-item">
+          <a href="#news" class="nav-link" data-translate="news">समाचार</a>
+        </li>
+        <li class="nav-item">
+          <a href="#tools" class="nav-link" data-translate="tools">उपकरण</a>
+        </li>
+        <li class="nav-item">
+          <a href="#contact" class="nav-link" data-translate="contact">संपर्क</a>
+        </li>
+      </ul>
+
+      <div class="nav-controls">
+        <select id="language-selector" class="language-selector" aria-label="भाषा चुनें">
+          <option value="hi">हिंदी</option>
+          <option value="en">English</option>
+          <option value="pa">ਪੰਜਾਬੀ</option>
+        </select>
+
+        <button id="theme-toggle" class="theme-toggle" aria-label="थीम बदलें">
+          <span id="theme-icon">☀️</span>
+        </button>
+
+        <button class="mobile-menu-toggle" aria-label="मेनू टॉगल">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero-section" id="home">
+    <div class="hero-background">
+      <div class="hero-particles"></div>
+    </div>
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-text">
+          <h1 class="hero-title">
+            <span class="typing-text">शिक्षा की नई दुनिया में आपका स्वागत है</span>
+          </h1>
+          <p class="hero-subtitle">
+            आधुनिक तकनीक के साथ सीखें, बढ़ें और सफल हों। हमारे interactive platform के साथ शिक्षा को बनाएं यादगार।
+          </p>
+          <div class="hero-buttons">
+            <button class="btn btn-primary ripple" data-translate="get-started">शुरू करें</button>
+            <button class="btn btn-secondary ripple" data-translate="learn-more">और जानें</button>
+          </div>
+        </div>
+        <div class="hero-image">
+          <img src="images/hero-education.jpg" alt="Education Illustration" class="img-fluid">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">हमारी विशेषताएं</h2>
+        <p class="section-subtitle">आधुनिक शिक्षा के लिए बेहतरीन सुविधाएं</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card" data-animate="fadeIn" data-delay="100">
+          <div class="feature-icon">
+            <div class="icon-animation">📚</div>
+          </div>
+          <h3 class="feature-title">Interactive Learning</h3>
+          <p class="feature-description">
+            विभिन्न interactive exercises और dynamic content के साथ सीखने का अनुभव बेहतर बनाएं
+          </p>
+          <button class="feature-btn ripple">और जानें</button>
+        </div>
+
+        <div class="feature-card" data-animate="fadeIn" data-delay="200">
+          <div class="feature-icon">
+            <div class="icon-animation">🎯</div>
+          </div>
+          <h3 class="feature-title">Personalized Content</h3>
+          <p class="feature-description">
+            आपकी progress और learning style के आधार पर customized learning path प्राप्त करें
+          </p>
+          <button class="feature-btn ripple">शुरू करें</button>
+        </div>
+
+        <div class="feature-card" data-animate="fadeIn" data-delay="300">
+          <div class="feature-icon">
+            <div class="icon-animation">🏆</div>
+          </div>
+          <h3 class="feature-title">Achievement System</h3>
+          <p class="feature-description">
+            Badges, certificates और milestones के साथ अपनी progress को track करें
+          </p>
+          <button class="feature-btn ripple">Progress देखें</button>
+        </div>
+
+        <div class="feature-card" data-animate="fadeIn" data-delay="400">
+          <div class="feature-icon">
+            <div class="icon-animation">💡</div>
+          </div>
+          <h3 class="feature-title">Smart Tools</h3>
+          <p class="feature-description">
+            Calculator, notes, और अन्य educational tools से सीखना बनाएं आसान।
+          </p>
+          <button class="feature-btn ripple">Tools देखें</button>
+        </div>
+        <!-- Google Map (Embed iframe, no API required) -->
+        <div class="feature-card" style="min-height:400px;">
+          <h3 class="feature-title">Our Location</h3>
+          <iframe
+            src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d28596.82728599268!2d80.4421632!3d26.371686399999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sin!4v1757329180361!5m2!1sen!2sin"
+            width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade" width="100%" height="300" style="border:0; border-radius:12px;"
+            allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade">
+          </iframe>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Courses Section -->
+  <section class="courses-section" id="courses">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Course Categories</h2>
+        <p class="section-subtitle">सभी स्तरों के लिए कोर्सेस</p>
+      </div>
+
+      <div class="courses-grid">
+        <div class="course-category" data-animate="slideUp" data-delay="100">
+          <div class="category-icon">🎒</div>
+          <h3 class="category-title">प्राथमिक शिक्षा</h3>
+          <p class="category-description">कक्षा 1-12 तक की पूर्ण शिक्षा</p>
+          <ul class="category-features">
+            <li>All Subjects</li>
+            <li>Board Exam Prep</li>
+            <li>Interactive Games</li>
+          </ul>
+          <button class="btn btn-outline">शुरू करें</button>
+        </div>
+
+        <div class="course-category" data-animate="slideUp" data-delay="200">
+          <div class="category-icon">📖</div>
+          <h3 class="category-title">माध्यमिक शिक्षा</h3>
+          <p class="category-description">Competitive Exams तक की संपूर्ण तैयारी</p>
+          <ul class="category-features">
+            <li>All Subjects</li>
+            <li>All vacancies</li>
+            <li>Career Guidance</li>
+            <li>JEE, NEET Preparation</li>
+          </ul>
+          <button class="btn btn-outline">Explore करें</button>
+        </div>
+
+        <div class="course-category" data-animate="slideUp" data-delay="300">
+          <div class="category-icon">🎓</div>
+          <h3 class="category-title">उच्च शिक्षा</h3>
+          <p class="category-description">Graduation & PG</p>
+          <ul class="category-features">
+            <li>All Subjects</li>
+            <li>All vacancies</li>
+            <li>Career Guidance</li>
+          </ul>
+          <button class="btn btn-outline">Join करें</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats Section -->
+  <section class="stats-section">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-number" data-count="50000">0</div>
+          <div class="stat-label">Students</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number" data-count="1200">0</div>
+          <div class="stat-label">Courses</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number" data-count="300">0</div>
+          <div class="stat-label">Teachers</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number" data-count="95" data-suffix="%">0</div>
+          <div class="stat-label">Success Rate</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tools Section -->
+  <section class="tools-section" id="tools">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Digital Tools</h2>
+        <p class="section-subtitle">सीखने के लिए उपयोगी उपकरण</p>
+      </div>
+
+      <div class="tools-grid">
+        <div class="tool-card">
+          <div class="tool-icon">🧮</div>
+          <h3 class="tool-title">Calculator</h3>
+          <p class="tool-description">Scientific calculator with advanced functions</p>
+          <button class="btn btn-primary">उपयोग करें</button>
+        </div>
+
+        <div class="tool-card">
+          <div class="tool-icon">📝</div>
+          <h3 class="tool-title">Notes</h3>
+          <p class="tool-description">Create और save करें अपने notes</p>
+          <button class="btn btn-primary">शुरू करें</button>
+        </div>
+
+        <div class="tool-card">
+          <div class="tool-icon">📊</div>
+          <h3 class="tool-title">Progress Tracker</h3>
+          <p class="tool-description">अपनी learning progress को track करें</p>
+          <button class="btn btn-primary">देखें</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- News Section -->
+  <section class="news-section" id="news">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Latest News</h2>
+        <p class="section-subtitle">शिक्षा जगत की नवीनतम खबरें</p>
+      </div>
+
+      <div class="news-grid">
+        <article class="news-card" data-animate="slideUp" data-delay="300">
+          <div class="news-image">
+            <img src="images/news1.jpg" alt="Education News" class="img-fluid">
+          </div>
+          <div class="news-content">
+            <div class="news-date">5 सितंबर 2024</div>
+            <h3 class="news-title">नई शिक्षा नीति के तहत बदलाव</h3>
+            <p class="news-excerpt">शिक्षा मंत्रालय द्वारा घोषित नए बदलावों की जानकारी...</p>
+            <button class="btn btn-text">पूरा पढ़ें</button>
+          </div>
+        </article>
+
+        <article class="news-card" data-animate="slideUp" data-delay="400">
+          <div class="news-image">
+            <img src="images/news2.jpg" alt="Technology News" class="img-fluid">
+          </div>
+          <div class="news-content">
+            <div class="news-date">3 सितंबर 2024</div>
+            <h3 class="news-title">Digital Learning में नई तकनीक</h3>
+            <p class="news-excerpt">AI और ML के साथ education में revolution...</p>
+            <button class="btn btn-text">पूरा पढ़ें</button>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Past News Section -->
+  <section class="past-news-section" id="past-news">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Major Past News</h2>
+        <p class="section-subtitle">पिछली बड़ी खबरें</p>
+      </div>
+
+      <div class="news-grid">
+        <article class="news-card" data-animate="slideUp" data-delay="300">
+          <div class="news-image">
+            <img src="images/news3.jpg" alt="Past Education News" class="img-fluid">
+          </div>
+          <div class="news-content">
+            <div class="news-date">15 अगस्त 2023</div>
+            <h3 class="news-title">NEP 2020 Implementation</h3>
+            <p class="news-excerpt">नई शिक्षा नीति के implementation की स्थिति और प्रभाव...</p>
+            <button class="btn btn-text">पूरा पढ़ें</button>
+          </div>
+        </article>
+
+        <article class="news-card" data-animate="slideUp" data-delay="400">
+          <div class="news-image">
+            <img src="images/news4.jpg" alt="Old Technology News" class="img-fluid">
+          </div>
+          <div class="news-content">
+            <div class="news-date">10 जून 2022</div>
+            <h3 class="news-title">Online Learning Platforms का प्रभाव</h3>
+            <p class="news-excerpt">ग्रामीण शिक्षा में digital learning platforms के फायदे और चुनौतियाँ...</p>
+            <button class="btn btn-text">पूरा पढ़ें</button>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Contact Section -->
+  <section class="contact-section" id="contact">
+    <div class="container">
+      <div class="contact-wrapper">
+        <div class="contact-info">
+          <h2 class="section-title">संपर्क करें</h2>
+          <p class="section-subtitle">हमसे जुड़ें और अपने सवालों के जवाब पाएं</p>
+
+          <div class="contact-details">
+            <div class="contact-item">
+              <div class="contact-icon">📧</div>
+              <div class="contact-text">
+                <strong>Email</strong>
+                <span>info@educationplatform.com</span>
+              </div>
+            </div>
+            <div class="contact-item">
+              <div class="contact-icon">📞</div>
+              <div class="contact-text">
+                <strong>Phone</strong>
+                <span>+91 98765 43210</span>
+              </div>
+            </div>
+            <div class="contact-item">
+              <div class="contact-icon">📍</div>
+              <div class="contact-text">
+                <strong>Address</strong>
+                <span>New Delhi, India</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="contact-form-container">
+          <form class="contact-form" id="contactForm" novalidate>
+            <div class="form-group">
+              <label for="name" class="form-label">नाम *</label>
+              <input type="text" id="name" name="name" class="form-input" required>
+              <span class="form-error" id="name-error"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="email" class="form-label">ईमेल *</label>
+              <input type="email" id="email" name="email" class="form-input" required>
+              <span class="form-error" id="email-error"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="phone" class="form-label">फोन नंबर</label>
+              <input type="tel" id="phone" name="phone" class="form-input">
+              <span class="form-error" id="phone-error"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="message" class="form-label">संदेश *</label>
+              <textarea id="message" name="message" class="form-input" rows="4" required></textarea>
+              <span class="form-error" id="message-error"></span>
+            </div>
+
+            <button type="submit" class="submit-btn ripple">
+              <span class="btn-text">संदेश भेजें</span>
+              <span class="btn-loading" style="display: none;">भेजा जा रहा है...</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Accessibility Panel -->
+  <div class="accessibility-panel">
+    <button class="accessibility-toggle" id="accessibility-toggle" aria-label="Accessibility Options">
+      ♿
+    </button>
+    <div class="accessibility-options">
+      <h3>Accessibility Options</h3>
+      <div class="accessibility-controls">
+        <button id="font-small" class="accessibility-btn">छोटा Font</button>
+        <button id="font-medium" class="accessibility-btn active">मध्यम Font</button>
+        <button id="font-large" class="accessibility-btn">बड़ा Font</button>
+        <button id="high-contrast" class="accessibility-btn">High Contrast</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const loadingScreen = document.getElementById("loading-screen");
+      if (loadingScreen) {
+        // पेज पूरी तरह लोड होने पर 1 सेकंड बाद fade out
+        window.addEventListener("load", () => {
+          setTimeout(() => {
+            loadingScreen.style.opacity = "0";
+            setTimeout(() => {
+              loadingScreen.style.display = "none";
+            }, 500); // transition खत्म होने के बाद hide
+          }, 1000);
+        });
+      }
+    });
+  </script>
+
+
+  <!-- JavaScript -->
+  <script src="js/main.js"></script>
+
+  <section aria-labelledby="faq-heading">
+    <h2 id="faq-heading" style="text-align:center; margin-bottom:1.5rem;">अक्सर पूछे जाने वाले प्रश्न (FAQ)</h2>
+
+    <details>
+      <summary
+        style="font-weight:600; cursor:pointer; padding:12px; border:1px solid #ccc; border-radius:8px; background:#f9f9f9;">
+        नई शिक्षा नीति क्या है?
+      </summary>
+      <div style="padding:12px 20px; border-left:3px solid #3b82f6; background:#f0f6ff;">
+        नई शिक्षा नीति 2020, भारत में शिक्षा व्यवस्था को सुधारने और आधुनिक बनाने के लिए लागू की गई है। इसका उद्देश्य
+        शिक्षा को सुलभ, समावेशी, और गुणवत्ता पूर्ण बनाना है।
+      </div>
+    </details>
+
+    <details style="margin-top:1rem;">
+      <summary
+        style="font-weight:600; cursor:pointer; padding:12px; border:1px solid #ccc; border-radius:8px; background:#f9f9f9;">
+        क्या यह वेबसाइट मोबाइल फ्रेंडली है?
+      </summary>
+      <div style="padding:12px 20px; border-left:3px solid #3b82f6; background:#f0f6ff;">
+        हाँ, वेबसाइट पूर्णतः responsive है और सभी मोबाइल उपकरणों पर सहज और सुगमता से काम करती है।
+      </div>
+    </details>
+
+    <details style="margin-top:1rem;">
+      <summary
+        style="font-weight:600; cursor:pointer; padding:12px; border:1px solid #ccc; border-radius:8px; background:#f9f9f9;">
+        क्या मैं अपनी भाषा में पढ़ सकता हूँ?
+      </summary>
+      <div style="padding:12px 20px; border-left:3px solid #3b82f6; background:#f0f6ff;">
+        वेबसाइट में बहुभाषी सपोर्ट उपलब्ध है। आप ऊपर दिए भाषा चयन मेनू से अपनी पसंदीदा भाषा चुन सकते हैं।
+      </div>
+    </details>
+  </section>
+
+
+  <!-- Footer -->
+  <footer class="footer" style="background: #000; color: #fff; padding: 40px 0;">
+    <div class="container">
+      <div class="footer-content" style="display: flex; flex-wrap: wrap; justify-content: space-between;">
+
+        <!-- Owner Info -->
+        <div class="footer-brand">
+          <h2 style="color: #3b82f6;">Karunesh Gupta</h2>
+          <p>B.Tech CSE Student | Cybersecurity Enthusiast | Future CBI Officer</p>
+        </div>
+
+        <!-- Useful Links -->
+        <div class="footer-section">
+          <h4 class="footer-title">My Profiles</h4>
+          <ul class="footer-links">
+            <li><a href="https://www.credly.com/users/karunesh-gupta" target="_blank">🎖 Credly</a></li>
+            <li><a href="https://www.linkedin.com/in/karunesh-gupta-507b242a9" target="_blank">💼 LinkedIn</a></li>
+            <li><a href="https://learn.microsoft.com/en-us/users/karuneshgupta3838/" target="_blank">📘 Microsoft
+                Learn</a></li>
+            <li><a href="https://www.hackerrank.com/profile/karuneshgupta786" target="_blank">💻 HackerRank</a></li>
+          </ul>
+        </div>
+
+        <!-- Interactive -->
+        <div class="footer-section">
+          <h4 class="footer-title">Connect With Me</h4>
+          <div class="social-links">
+            <a href="mailto:karunesh@example.com" class="social-link">📧</a>
+            <a href="tel:+919876543210" class="social-link">📞</a>
+            <a href="#contact" class="social-link">📩</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom" style="margin-top: 20px; text-align: center;">
+        <p>&copy; 2025 Karunesh Gupta. All Rights Reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+</body>
+
+</html>
